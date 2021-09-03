@@ -1,54 +1,91 @@
 """
-==============================
-Rescale, resize, and downscale
-==============================
-
-`Rescale` operation resizes an image by a given scaling factor. The scaling
-factor can either be a single floating point value, or multiple values - one
-along each axis.
-
-`Resize` serves the same purpose, but allows to specify an output image shape
-instead of a scaling factor.
-
-Note that when down-sampling an image, `resize` and `rescale` should perform
-Gaussian smoothing to avoid aliasing artifacts. See the `anti_aliasing` and
-`anti_aliasing_sigma` arguments to these functions.
-
-`Downscale` serves the purpose of down-sampling an n-dimensional image by
-integer factors using the local mean on the elements of each block of the size
-factors given as a parameter to the function.
-
+================================
+Recognizing hand-written digits
+================================
+This example shows how scikit-learn can be used to recognize images of
+hand-written digits, from 0-9.
 """
 
+print(__doc__)
+
+# Author: Gael Varoquaux <gael dot varoquaux at normalesup dot org>
+# License: BSD 3 clause
+
+# Standard scientific Python imports
 import matplotlib.pyplot as plt
 
-from skimage import data, color
-from skimage.transform import rescale, resize, downscale_local_mean
+# Import datasets, classifiers and performance metrics
+from sklearn import datasets, svm, metrics
+from sklearn.model_selection import train_test_split
 
-image = color.rgb2gray(data.astronaut())
+###############################################################################
+# Digits dataset
+# --------------
+#
+# The digits dataset consists of 8x8
+# pixel images of digits. The ``images`` attribute of the dataset stores
+# 8x8 arrays of grayscale values for each image. We will use these arrays to
+# visualize the first 4 images. The ``target`` attribute of the dataset stores
+# the digit each image represents and this is included in the title of the 4
+# plots below.
+#
+# Note: if we were working from image files (e.g., 'png' files), we would load
+# them using :func:`matplotlib.pyplot.imread`.
 
-image_rescaled = rescale(image, 0.25, anti_aliasing=False)
-image_resized = resize(image, (image.shape[0] // 4, image.shape[1] // 4),
-                       anti_aliasing=True)
-image_downscaled = downscale_local_mean(image, (4, 3))
+digits = datasets.load_digits()
 
-fig, axes = plt.subplots(nrows=2, ncols=2)
+_, axes = plt.subplots(nrows=1, ncols=4, figsize=(10, 3))
+for ax, image, label in zip(axes, digits.images, digits.target):
+    ax.set_axis_off()
+    ax.imshow(image, cmap=plt.cm.gray_r, interpolation='nearest')
+    ax.set_title('Training: %i' % label)
 
-ax = axes.ravel()
+###############################################################################
+# Classification
+# --------------
+#
+# To apply a classifier on this data, we need to flatten the images, turning
+# each 2-D array of grayscale values from shape ``(8, 8)`` into shape
+# ``(64,)``. Subsequently, the entire dataset will be of shape
+# ``(n_samples, n_features)``, where ``n_samples`` is the number of images and
+# ``n_features`` is the total number of pixels in each image.
+#
+# We can then split the data into train and test subsets and fit a support
+# vector classifier on the train samples. The fitted classifier can
+# subsequently be used to predict the value of the digit for the samples
+# in the test subset.
 
-ax[0].imshow(image, cmap='gray')
-ax[0].set_title("Original image")
+# flatten the images
+n_samples = len(digits.images)
+data = digits.images.reshape((n_samples, -1))
 
-ax[1].imshow(image_rescaled, cmap='gray')
-ax[1].set_title("Rescaled image (aliasing)")
+arr =[64,32,16]
+split_value =[0.9,0.7,0.6]
+# Create a classifier: a support vector classifier
 
-ax[2].imshow(image_resized, cmap='gray')
-ax[2].set_title("Resized image (no aliasing)")
+for res in arr:
+    for sp in split_value:
+        clf = svm.SVC(gamma=0.001)
 
-ax[3].imshow(image_downscaled, cmap='gray')
-ax[3].set_title("Downscaled image (no aliasing)")
+        # Split data into 50% train and 50% test subsets
+        X_train, X_test, y_train, y_test = train_test_split(
+            data, digits.target, test_size=sp, shuffle=False)
 
-ax[0].set_xlim(0, 512)
-ax[0].set_ylim(512, 0)
-plt.tight_layout()
-plt.show()
+        # Learn the digits on the train subset
+        clf.fit(X_train, y_train)
+
+        # Predict the value of the digit on the test subset
+        predicted = clf.predict(X_test)
+
+        ###############################################################################
+        # Below we visualize the first 4 test samples and show their predicted
+        # digit value in the title.
+
+        _, axes = plt.subplots(nrows=1, ncols=4, figsize=(10, 3))
+        for ax, image, prediction in zip(axes, X_test, predicted):
+            ax.set_axis_off()
+            image = image.reshape(res, res)
+            ax.imshow(image, cmap=plt.cm.gray_r, interpolation='nearest')
+            ax.set_title(f'Prediction: {prediction}')
+
+        print(res,"x",res,"----->",sp*100,":",(1-sp)*100,"----->")
